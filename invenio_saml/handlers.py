@@ -12,6 +12,7 @@ from flask_login import current_user
 from flask_security import logout_user
 from invenio_db import db
 from invenio_oauthclient.errors import AlreadyLinkedError
+from invenio_oauthclient.models import RemoteAccount
 from invenio_oauthclient.utils import create_csrf_disabled_registrationform, \
     fill_form
 
@@ -69,6 +70,26 @@ def default_account_setup(user, account_info):
             dict(
                 id=account_info['external_id'],
                 method=account_info['external_method']))
+    except AlreadyLinkedError:
+        pass
+
+
+def remote_account(user, remote_app):
+    """Link a user to an remote_account.
+
+    :param user: A :class:`invenio_accounts.models.User` instance.
+    :param remote_app: The Client ID associated with the user.
+        (Default: ``None``)
+    :raises invenio_oauthclient.errors.AlreadyLinkedError: Raised if already
+        exists a link.
+    """
+    try:
+        with db.session.begin_nested():
+            db.session.add(
+                RemoteAccount(
+                    user_id=user.get_id(),
+                    client_id=remote_app,
+                    extra_data=None))
     except AlreadyLinkedError:
         pass
 
@@ -148,6 +169,7 @@ def acs_handler_factory(remote_app, account_setup=default_account_setup):
                 abort(401)
 
             account_setup(user, _account_info)
+            remote_account(user, remote_app)
 
         db.session.commit()
 
